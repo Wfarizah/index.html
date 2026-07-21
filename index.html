@@ -1,0 +1,997 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Laporan Dashboard Data - Cream & Gold Edition</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- PapaParse for parsing CSV -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
+    <!-- html2pdf.js for direct PDF export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        cream: {
+                            50: '#FCFBF7',
+                            100: '#FAF7F0',
+                            200: '#F4EFE3',
+                            300: '#EBDCB9',
+                            400: '#DFCA92',
+                        },
+                        gold: {
+                            100: '#F9F1D8',
+                            300: '#E5C158',
+                            500: '#D4AF37',
+                            600: '#B8860B',
+                            700: '#996B08',
+                            800: '#735004',
+                        },
+                        charcoal: {
+                            800: '#2A2621',
+                            900: '#1A1815',
+                        }
+                    },
+                    fontFamily: {
+                        heading: ['Cinzel', 'serif'],
+                        body: ['Plus Jakarta Sans', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background-color: #FAF7F0;
+            color: #2A2621;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+
+        .gold-gradient-bg {
+            background: linear-gradient(135deg, #2A2621 0%, #1A1815 100%);
+            border-bottom: 3px solid #D4AF37;
+        }
+
+        .gold-card-header {
+            background: linear-gradient(90deg, #F4EFE3 0%, #FAF7F0 100%);
+            border-left: 4px solid #D4AF37;
+        }
+
+        .gold-border {
+            border: 1px solid #E3D3A3;
+        }
+
+        .gold-glow {
+            box-shadow: 0 4px 20px -2px rgba(212, 175, 55, 0.15);
+        }
+
+        .btn-gold {
+            background: linear-gradient(135deg, #D4AF37 0%, #B8860B 100%);
+            color: #FFFFFF;
+            transition: all 0.3s ease;
+        }
+
+        .btn-gold:hover {
+            background: linear-gradient(135deg, #E5C158 0%, #D4AF37 100%);
+            box-shadow: 0 4px 12px rgba(212, 175, 55, 0.3);
+            transform: translateY(-1px);
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #F4EFE3;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #D4AF37;
+            border-radius: 4px;
+        }
+
+        /* Print Media Styles for clean PDF export */
+        @media print {
+            .no-print {
+                display: none !important;
+            }
+            body {
+                background: white !important;
+                color: black !important;
+            }
+            .print-full-width {
+                width: 100% !important;
+                max-width: 100% !important;
+                box-shadow: none !important;
+            }
+            .page-break {
+                page-break-before: always;
+            }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased">
+
+    <!-- Top Navigation / Header -->
+    <header class="gold-gradient-bg text-white shadow-lg sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div class="flex items-center space-x-3">
+                    <div class="w-12 h-12 rounded-full bg-gradient-to-tr from-amber-600 via-gold-500 to-amber-200 flex items-center justify-center text-charcoal-900 shadow-md">
+                        <i class="fa-solid fa-chart-line text-xl font-bold"></i>
+                    </div>
+                    <div>
+                        <h1 class="font-heading text-xl md:text-2xl font-bold text-gold-300 tracking-wider">
+                            LAPORAN DASHBOARD UTAMA
+                        </h1>
+                        <p class="text-xs text-amber-100/80 flex items-center gap-2">
+                            <span id="liveStatusIndicator" class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                            <span>Google Sheets Live Data</span> | <span id="lastUpdatedText">Menghubung data...</span>
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Global Quick Action Buttons -->
+                <div class="flex flex-wrap items-center gap-2 no-print">
+                    <button id="refreshBtn" onclick="fetchLiveData()" class="btn-gold text-xs font-semibold px-3 py-2 rounded-lg flex items-center gap-2 shadow">
+                        <i class="fa-solid fa-rotate" id="refreshIcon"></i>
+                        <span>Kemaskini Data</span>
+                    </button>
+
+                    <!-- Manual CSV Upload Fallback Button -->
+                    <label class="bg-charcoal-800 border border-gold-500/40 hover:bg-charcoal-900 text-gold-300 text-xs font-semibold px-3 py-2 rounded-lg cursor-pointer transition flex items-center gap-1.5 shadow" title="Muat naik fail CSV jika pautan terhalang">
+                        <i class="fa-solid fa-file-upload text-gold-500"></i>
+                        <span>Muat Naik CSV</span>
+                        <input type="file" id="manualCsvInput" accept=".csv" onchange="handleManualCsvUpload(event)" class="hidden">
+                    </label>
+
+                    <div class="flex items-center bg-charcoal-800 border border-gold-500/30 rounded-lg px-2 py-1 text-xs">
+                        <label for="autoRefreshSelect" class="text-amber-200 text-xs mr-2">Auto-Sync:</label>
+                        <select id="autoRefreshSelect" onchange="setupAutoRefresh()" class="bg-transparent text-white text-xs focus:outline-none cursor-pointer">
+                            <option value="0" class="text-black">Manual</option>
+                            <option value="30" class="text-black"> Setiap 30 Saat</option>
+                            <option value="60" class="text-black" selected>Setiap 1 Minit</option>
+                            <option value="300" class="text-black">Setiap 5 Minit</option>
+                        </select>
+                    </div>
+
+                    <button onclick="exportToPDF()" class="bg-amber-100 text-charcoal-900 hover:bg-white text-xs font-semibold px-3 py-2 rounded-lg border border-gold-500 transition flex items-center gap-1.5 shadow">
+                        <i class="fa-solid fa-file-pdf text-red-600"></i>
+                        <span>Muat Turun PDF</span>
+                    </button>
+
+                    <button onclick="exportToWord()" class="bg-amber-100 text-charcoal-900 hover:bg-white text-xs font-semibold px-3 py-2 rounded-lg border border-gold-500 transition flex items-center gap-1.5 shadow">
+                        <i class="fa-solid fa-file-word text-blue-600"></i>
+                        <span>Muat Turun Word</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6" id="dashboardReportContent">
+
+        <!-- Filter Panel -->
+        <section class="bg-white rounded-xl p-5 gold-border gold-glow no-print">
+            <div class="flex items-center justify-between mb-4 pb-2 border-b border-cream-300">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-filter text-gold-600 text-lg"></i>
+                    <h2 class="font-heading font-bold text-charcoal-900 text-base">PENAPIS DATA (FILTERS)</h2>
+                </div>
+                <button onclick="resetFilters()" class="text-xs text-amber-800 hover:text-gold-600 font-medium underline flex items-center gap-1">
+                    <i class="fa-solid fa-arrow-rotate-left"></i> Reset Filter
+                </button>
+            </div>
+
+            <!-- Dynamic Filters Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4" id="filtersGrid">
+                <!-- Search Input -->
+                <div>
+                    <label class="block text-xs font-semibold text-charcoal-800 mb-1">Carian Teks / Kata Kunci</label>
+                    <div class="relative">
+                        <input type="text" id="searchInput" oninput="applyFilters()" placeholder="Cari dalam semua medan..." 
+                            class="w-full bg-cream-50 border border-cream-300 rounded-lg pl-9 pr-3 py-2 text-xs text-charcoal-900 focus:outline-none focus:border-gold-500 transition">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-gold-600 text-xs"></i>
+                    </div>
+                </div>
+
+                <!-- Dynamic Dropdowns Container -->
+                <div id="dynamicFiltersContainer" class="contents">
+                    <!-- Populated via JS based on CSV Columns -->
+                </div>
+            </div>
+
+            <!-- Active Filter Badges -->
+            <div class="mt-4 flex flex-wrap items-center gap-2" id="activeFilterTags">
+                <span class="text-xs text-gray-500 italic">Tiada filter aktif</span>
+            </div>
+        </section>
+
+        <!-- Notification Banner / Loading state -->
+        <div id="statusBanner" class="hidden rounded-lg p-4 mb-4 border flex items-center gap-3">
+            <i id="statusIcon" class="fa-solid"></i>
+            <span id="statusText" class="text-xs font-medium"></span>
+        </div>
+
+        <!-- Metric Summary Cards Section -->
+        <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" id="kpiCardsContainer">
+            <!-- Loading Skeletons -->
+            <div class="bg-white p-5 rounded-xl gold-border shadow-sm animate-pulse flex items-center justify-between">
+                <div class="space-y-2">
+                    <div class="h-3 bg-cream-200 rounded w-24"></div>
+                    <div class="h-6 bg-cream-300 rounded w-16"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Visual Charts Section -->
+        <section class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Chart 1: Categorical Breakdown -->
+            <div class="bg-white rounded-xl p-5 gold-border gold-glow flex flex-col">
+                <div class="flex items-center justify-between pb-3 mb-3 border-b border-cream-200 gold-card-header rounded-t-lg -mx-5 -mt-5 p-4">
+                    <h3 class="font-heading font-bold text-sm text-charcoal-900 flex items-center gap-2">
+                        <i class="fa-solid fa-chart-pie text-gold-600"></i>
+                        <span id="chart1Title">Pengagihan Kategori</span>
+                    </h3>
+                    <select id="chart1ColumnSelect" onchange="renderCharts()" class="bg-white border border-cream-300 text-xs rounded px-2 py-1 focus:outline-none">
+                        <!-- Options generated dynamically -->
+                    </select>
+                </div>
+                <div class="relative flex-grow min-h-[280px] flex items-center justify-center">
+                    <canvas id="chart1Canvas"></canvas>
+                </div>
+            </div>
+
+            <!-- Chart 2: Quantitative Bar / Comparison -->
+            <div class="bg-white rounded-xl p-5 gold-border gold-glow flex flex-col">
+                <div class="flex items-center justify-between pb-3 mb-3 border-b border-cream-200 gold-card-header rounded-t-lg -mx-5 -mt-5 p-4">
+                    <h3 class="font-heading font-bold text-sm text-charcoal-900 flex items-center gap-2">
+                        <i class="fa-solid fa-chart-column text-gold-600"></i>
+                        <span id="chart2Title">Analisis Nilai Metrik</span>
+                    </h3>
+                    <select id="chart2ColumnSelect" onchange="renderCharts()" class="bg-white border border-cream-300 text-xs rounded px-2 py-1 focus:outline-none">
+                        <!-- Options generated dynamically -->
+                    </select>
+                </div>
+                <div class="relative flex-grow min-h-[280px] flex items-center justify-center">
+                    <canvas id="chart2Canvas"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- Main Data Table Section -->
+        <section class="bg-white rounded-xl gold-border gold-glow overflow-hidden">
+            <div class="p-4 gold-card-header flex flex-col sm:flex-row items-center justify-between gap-3 border-b border-cream-300">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-table-list text-gold-600"></i>
+                    <h2 class="font-heading font-bold text-charcoal-900 text-base">JADUAL REKOD DATA TEPAT</h2>
+                </div>
+                <div class="flex items-center gap-3 text-xs text-charcoal-800">
+                    <span>Memaparkan <strong id="recordCountText" class="text-gold-700">0</strong> entri</span>
+                    <button onclick="exportCSV()" class="no-print text-gold-700 hover:text-gold-800 font-semibold flex items-center gap-1 border border-gold-300 bg-cream-50 px-2.5 py-1 rounded">
+                        <i class="fa-solid fa-file-csv"></i> Export CSV
+                    </button>
+                </div>
+            </div>
+
+            <!-- Table Scroll Container -->
+            <div class="overflow-x-auto min-h-[300px]">
+                <table class="w-full text-left border-collapse" id="mainDataTable">
+                    <thead>
+                        <tr id="tableHeaderRow" class="bg-charcoal-900 text-gold-300 text-xs font-semibold uppercase tracking-wider border-b border-gold-600">
+                            <!-- Headers populated via JS -->
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody" class="divide-y divide-cream-200 text-xs text-charcoal-800">
+                        <!-- Rows populated via JS -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination Controls -->
+            <div class="p-4 bg-cream-50 border-t border-cream-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs no-print">
+                <div class="flex items-center gap-2">
+                    <span>Baris per halaman:</span>
+                    <select id="pageSizeSelect" onchange="changePageSize()" class="bg-white border border-cream-300 rounded px-2 py-1">
+                        <option value="10">10</option>
+                        <option value="25" selected>25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                        <option value="999999">Semua</option>
+                    </select>
+                </div>
+
+                <div class="flex items-center space-x-2">
+                    <button id="prevPageBtn" onclick="prevPage()" class="px-3 py-1 bg-white border border-cream-300 rounded hover:bg-cream-100 disabled:opacity-50">
+                        <i class="fa-solid fa-chevron-left"></i>
+                    </button>
+                    <span id="pageIndicator" class="font-medium">Halaman 1 daripada 1</span>
+                    <button id="nextPageBtn" onclick="nextPage()" class="px-3 py-1 bg-white border border-cream-300 rounded hover:bg-cream-100 disabled:opacity-50">
+                        <i class="fa-solid fa-chevron-right"></i>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-charcoal-900 text-amber-100/70 py-6 border-t border-gold-600 mt-12 no-print">
+        <div class="max-w-7xl mx-auto px-4 text-center text-xs space-y-2">
+            <p class="font-heading tracking-widest text-gold-300 uppercase font-semibold">
+                Sistem Pelaporan & Dashboard Data Google Sheets
+            </p>
+            <p>© Live Dashboard Report - Rekabentuk Krim & Emas Eksklusif</p>
+        </div>
+    </footer>
+
+    <script>
+        // Data URL provided by user
+        const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS0Nq-p1F5dhglwGy5wCv5zJnFg55_KY4ddv5LOafERu2Je2E-1620RnRVjEH6arO2ok5c4zBuboZ1x/pub?output=csv";
+
+        // Global State Variables
+        let rawData = [];
+        let filteredData = [];
+        let columns = [];
+        let numericColumns = [];
+        let categoricalColumns = [];
+        
+        let currentPage = 1;
+        let pageSize = 25;
+        let autoRefreshInterval = null;
+
+        let chart1Instance = null;
+        let chart2Instance = null;
+
+        // On Page Load
+        window.addEventListener('DOMContentLoaded', () => {
+            fetchLiveData();
+            setupAutoRefresh();
+        });
+
+        async function fetchLiveData() {
+            const refreshIcon = document.getElementById('refreshIcon');
+            if (refreshIcon) refreshIcon.classList.add('fa-spin');
+
+            showStatus('Mengambil data terkini daripada Google Sheet...', 'info');
+
+            // List of URLs to attempt (Direct first, then robust fallback proxies)
+            const fetchEndpoints = [
+                CSV_URL,
+                `https://corsproxy.io/?${encodeURIComponent(CSV_URL)}`,
+                `https://api.allorigins.win/raw?url=${encodeURIComponent(CSV_URL)}`
+            ];
+
+            let csvText = null;
+
+            for (const endpoint of fetchEndpoints) {
+                try {
+                    const response = await fetch(endpoint);
+                    if (response.ok) {
+                        const text = await response.text();
+                        if (text && text.trim().length > 0 && !text.includes('<!DOCTYPE html>')) {
+                            csvText = text;
+                            break; // Successfully fetched valid CSV text
+                        }
+                    }
+                } catch (err) {
+                    console.warn(`Attempt failed for endpoint ${endpoint}:`, err);
+                }
+            }
+
+            if (!csvText) {
+                showStatus('Gagal mengambil data automatik daripada Google Sheets (Sekatan CORS/Rangkaian). Sila guna butang "Muat Naik CSV" untuk guna fail lokal.', 'error');
+                if (refreshIcon) refreshIcon.classList.remove('fa-spin');
+                return;
+            }
+
+            parseCSVContent(csvText);
+
+            if (refreshIcon) refreshIcon.classList.remove('fa-spin');
+        }
+
+        function parseCSVContent(csvText) {
+            Papa.parse(csvText, {
+                header: true,
+                skipEmptyLines: true,
+                dynamicTyping: false, // Keep raw strings to preserve exact formatting/integrity
+                complete: function(results) {
+                    if (results.data && results.data.length > 0) {
+                        rawData = results.data;
+                        processColumns();
+                        buildFilterControls();
+                        applyFilters();
+                        
+                        const now = new Date();
+                        document.getElementById('lastUpdatedText').innerText = `Dikemaskini: ${now.toLocaleTimeString('ms-MY')}`;
+                        showStatus(`Berjaya memuat naik ${rawData.length} baris data daripada Google Sheet!`, 'success');
+                    } else {
+                        showStatus('Fail Google Sheet dimuat tetapi tiada rekod dijumpai.', 'warning');
+                    }
+                },
+                error: function(err) {
+                    showStatus('Ralat semasa membaca format CSV: ' + err.message, 'error');
+                }
+            });
+        }
+
+        function handleManualCsvUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            showStatus(`Membaca fail ${file.name}...`, 'info');
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                parseCSVContent(e.target.result);
+            };
+            reader.onerror = function() {
+                showStatus('Gagal membaca fail CSV tempatan.', 'error');
+            };
+            reader.readAsText(file);
+        }
+
+        // Auto Refresh Config
+        function setupAutoRefresh() {
+            if (autoRefreshInterval) clearInterval(autoRefreshInterval);
+            const seconds = parseInt(document.getElementById('autoRefreshSelect').value, 10);
+            if (seconds > 0) {
+                autoRefreshInterval = setInterval(() => {
+                    fetchLiveData();
+                }, seconds * 1000);
+            }
+        }
+
+        function processColumns() {
+            if (rawData.length === 0) return;
+            
+            // Extract column names from first object
+            columns = Object.keys(rawData[0]).filter(col => col.trim() !== "");
+            numericColumns = [];
+            categoricalColumns = [];
+
+            columns.forEach(col => {
+                let isNumeric = true;
+                let sampleCount = 0;
+
+                for (let i = 0; i < Math.min(rawData.length, 50); i++) {
+                    const val = rawData[i][col];
+                    if (val !== null && val !== undefined && val !== "") {
+                        sampleCount++;
+                        // Strip currency symbols and commas for numeric check
+                        const cleanVal = String(val).replace(/[\$,RM\s]/gi, '').replace(/,/g, '');
+                        if (isNaN(Number(cleanVal))) {
+                            isNumeric = false;
+                            break;
+                        }
+                    }
+                }
+
+                if (isNumeric && sampleCount > 0) {
+                    numericColumns.push(col);
+                } else {
+                    categoricalColumns.push(col);
+                }
+            });
+
+            // Populate Chart Selection Dropdowns
+            const chart1Select = document.getElementById('chart1ColumnSelect');
+            const chart2Select = document.getElementById('chart2ColumnSelect');
+
+            chart1Select.innerHTML = categoricalColumns.map(c => `<option value="${c}">${c}</option>`).join('');
+            if (categoricalColumns.length === 0) {
+                chart1Select.innerHTML = columns.map(c => `<option value="${c}">${c}</option>`).join('');
+            }
+
+            chart2Select.innerHTML = numericColumns.map(c => `<option value="${c}">${c}</option>`).join('');
+            if (numericColumns.length === 0) {
+                chart2Select.innerHTML = columns.map(c => `<option value="${c}">${c}</option>`).join('');
+            }
+        }
+
+        function buildFilterControls() {
+            const container = document.getElementById('dynamicFiltersContainer');
+            container.innerHTML = '';
+
+            // Generate dropdown filter for up to 3 categorical columns
+            const filterCols = categoricalColumns.slice(0, 3);
+
+            filterCols.forEach((col, idx) => {
+                // Get unique values for this column
+                const uniqueVals = [...new Set(rawData.map(r => r[col]))].filter(Boolean).sort();
+
+                const div = document.createElement('div');
+                div.innerHTML = `
+                    <label class="block text-xs font-semibold text-charcoal-800 mb-1">Penapis: ${col}</label>
+                    <select id="filter_col_${idx}" data-col="${col}" onchange="applyFilters()" class="dynamic-filter-select w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 text-xs text-charcoal-900 focus:outline-none focus:border-gold-500 transition">
+                        <option value="">Semua (${col})</option>
+                        ${uniqueVals.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('')}
+                    </select>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function applyFilters() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase().trim();
+            const filterSelects = document.querySelectorAll('.dynamic-filter-select');
+
+            const activeFilters = [];
+            filterSelects.forEach(select => {
+                if (select.value) {
+                    activeFilters.push({
+                        column: select.getAttribute('data-col'),
+                        value: select.value
+                    });
+                }
+            });
+
+            filteredData = rawData.filter(row => {
+                // Check Dropdown filters
+                for (let filter of activeFilters) {
+                    if (String(row[filter.column]) !== filter.value) {
+                        return false;
+                    }
+                }
+
+                // Check Text Search
+                if (searchTerm) {
+                    const rowText = Object.values(row).join(' ').toLowerCase();
+                    if (!rowText.includes(searchTerm)) {
+                        return false;
+                    }
+                }
+
+                return true;
+            });
+
+            currentPage = 1;
+            renderKPIs();
+            renderCharts();
+            renderTable();
+            renderActiveFilterTags(searchTerm, activeFilters);
+        }
+
+        function resetFilters() {
+            document.getElementById('searchInput').value = '';
+            document.querySelectorAll('.dynamic-filter-select').forEach(s => s.value = '');
+            applyFilters();
+        }
+
+        function renderActiveFilterTags(search, activeFilters) {
+            const tagContainer = document.getElementById('activeFilterTags');
+            tagContainer.innerHTML = '';
+
+            if (!search && activeFilters.length === 0) {
+                tagContainer.innerHTML = '<span class="text-xs text-gray-500 italic">Tiada filter aktif</span>';
+                return;
+            }
+
+            if (search) {
+                tagContainer.innerHTML += `
+                    <span class="inline-flex items-center gap-1 bg-gold-100 text-gold-800 border border-gold-300 px-2.5 py-1 rounded-full text-xs font-medium">
+                        Carian: "${search}"
+                    </span>
+                `;
+            }
+
+            activeFilters.forEach(f => {
+                tagContainer.innerHTML += `
+                    <span class="inline-flex items-center gap-1 bg-gold-100 text-gold-800 border border-gold-300 px-2.5 py-1 rounded-full text-xs font-medium">
+                        ${f.column}: ${f.value}
+                    </span>
+                `;
+            });
+        }
+
+        function renderKPIs() {
+            const container = document.getElementById('kpiCardsContainer');
+            container.innerHTML = '';
+
+            // Card 1: Total Records
+            const card1 = document.createElement('div');
+            card1.className = 'bg-white p-5 rounded-xl gold-border gold-glow flex items-center justify-between';
+            card1.innerHTML = `
+                <div>
+                    <p class="text-xs font-semibold uppercase text-gold-600 tracking-wider">Jumlah Rekod Data</p>
+                    <h3 class="text-2xl font-bold font-heading text-charcoal-900 mt-1">${filteredData.length.toLocaleString('ms-MY')}</h3>
+                    <p class="text-[10px] text-gray-500 mt-0.5">Daripada ${rawData.length} rekod keseluruhan</p>
+                </div>
+                <div class="w-12 h-12 rounded-lg bg-cream-100 border border-gold-300 flex items-center justify-center text-gold-600 text-xl">
+                    <i class="fa-solid fa-database"></i>
+                </div>
+            `;
+            container.appendChild(card1);
+
+            // KPI Cards for top Numeric Columns
+            numericColumns.slice(0, 3).forEach(col => {
+                let sum = 0;
+                let count = 0;
+
+                filteredData.forEach(row => {
+                    const rawVal = row[col];
+                    if (rawVal !== undefined && rawVal !== null) {
+                        const num = Number(String(rawVal).replace(/[\$,RM\s]/gi, '').replace(/,/g, ''));
+                        if (!isNaN(num)) {
+                            sum += num;
+                            count++;
+                        }
+                    }
+                });
+
+                const avg = count > 0 ? (sum / count) : 0;
+
+                const card = document.createElement('div');
+                card.className = 'bg-white p-5 rounded-xl gold-border gold-glow flex items-center justify-between';
+                card.innerHTML = `
+                    <div>
+                        <p class="text-xs font-semibold uppercase text-gold-600 tracking-wider truncate max-w-[150px]" title="${col}">Jumlah ${col}</p>
+                        <h3 class="text-2xl font-bold font-heading text-charcoal-900 mt-1">
+                            ${sum.toLocaleString('ms-MY', { maximumFractionDigits: 2 })}
+                        </h3>
+                        <p class="text-[10px] text-gray-500 mt-0.5">Purata: ${avg.toLocaleString('ms-MY', { maximumFractionDigits: 2 })}</p>
+                    </div>
+                    <div class="w-12 h-12 rounded-lg bg-cream-100 border border-gold-300 flex items-center justify-center text-gold-600 text-xl">
+                        <i class="fa-solid fa-coins"></i>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function renderCharts() {
+            if (filteredData.length === 0) return;
+
+            const chart1Col = document.getElementById('chart1ColumnSelect').value;
+            const chart2Col = document.getElementById('chart2ColumnSelect').value;
+
+            // --- CHART 1: Categorical Distribution (Pie / Doughnut) ---
+            if (chart1Col) {
+                document.getElementById('chart1Title').innerText = `Agihan Mengikut ${chart1Col}`;
+                const counts = {};
+                filteredData.forEach(r => {
+                    const key = String(r[chart1Col] || 'Lain-lain');
+                    counts[key] = (counts[key] || 0) + 1;
+                });
+
+                const labels = Object.keys(counts).slice(0, 8); // Top 8
+                const dataValues = labels.map(l => counts[l]);
+
+                const goldPalette = ['#D4AF37', '#B8860B', '#E5C158', '#996B08', '#735004', '#F4EFE3', '#C5A059', '#8C6D23'];
+
+                if (chart1Instance) chart1Instance.destroy();
+
+                const ctx1 = document.getElementById('chart1Canvas').getContext('2d');
+                chart1Instance = new Chart(ctx1, {
+                    type: 'doughnut',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            data: dataValues,
+                            backgroundColor: goldPalette,
+                            borderColor: '#FFFFFF',
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: { font: { family: 'Plus Jakarta Sans', size: 11 } }
+                            }
+                        }
+                    }
+                });
+            }
+
+            // --- CHART 2: Numeric Values / Aggregation (Bar Chart) ---
+            if (chart2Col) {
+                document.getElementById('chart2Title').innerText = `Analisis Kumpulan - ${chart2Col}`;
+
+                // Group numeric values by the first categorical column or first column
+                const groupByCol = categoricalColumns[0] || columns[0];
+                const sums = {};
+
+                filteredData.forEach(r => {
+                    const groupKey = String(r[groupByCol] || 'Lain-lain');
+                    const num = Number(String(r[chart2Col]).replace(/[\$,RM\s]/gi, '').replace(/,/g, ''));
+                    if (!isNaN(num)) {
+                        sums[groupKey] = (sums[groupKey] || 0) + num;
+                    }
+                });
+
+                const labels = Object.keys(sums).slice(0, 10);
+                const dataValues = labels.map(l => sums[l]);
+
+                if (chart2Instance) chart2Instance.destroy();
+
+                const ctx2 = document.getElementById('chart2Canvas').getContext('2d');
+                chart2Instance = new Chart(ctx2, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: `Jumlah ${chart2Col}`,
+                            data: dataValues,
+                            backgroundColor: '#D4AF37',
+                            borderColor: '#B8860B',
+                            borderWidth: 1,
+                            borderRadius: 6
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                grid: { color: '#F4EFE3' }
+                            },
+                            x: {
+                                grid: { display: false }
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        function renderTable() {
+            const headerRow = document.getElementById('tableHeaderRow');
+            const tbody = document.getElementById('tableBody');
+
+            // Render Header
+            headerRow.innerHTML = columns.map(col => `
+                <th class="px-4 py-3 text-left font-bold tracking-wider cursor-pointer hover:bg-charcoal-800 transition" onclick="sortTable('${col}')">
+                    <div class="flex items-center gap-1">
+                        <span>${escapeHtml(col)}</span>
+                        <i class="fa-solid fa-sort text-[10px] opacity-60"></i>
+                    </div>
+                </th>
+            `).join('');
+
+            // Paginate
+            const startIndex = (currentPage - 1) * pageSize;
+            const paginatedData = filteredData.slice(startIndex, startIndex + pageSize);
+
+            document.getElementById('recordCountText').innerText = filteredData.length;
+
+            if (paginatedData.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="${columns.length}" class="text-center py-8 text-gray-500 italic">
+                            Tiada rekod data dijumpai padan dengan kriteria carian/filter.
+                        </td>
+                    </tr>
+                `;
+            } else {
+                tbody.innerHTML = paginatedData.map((row, rIdx) => `
+                    <tr class="${rIdx % 2 === 0 ? 'bg-white' : 'bg-cream-50'} hover:bg-gold-100/50 transition">
+                        ${columns.map(col => {
+                            const val = row[col] !== undefined ? row[col] : '';
+                            return `<td class="px-4 py-2.5 whitespace-nowrap text-charcoal-800 border-b border-cream-200">${escapeHtml(String(val))}</td>`;
+                        }).join('')}
+                    </tr>
+                `).join('');
+            }
+
+            // Update Pagination Controls
+            const totalPages = Math.ceil(filteredData.length / pageSize) || 1;
+            document.getElementById('pageIndicator').innerText = `Halaman ${currentPage} daripada ${totalPages}`;
+            document.getElementById('prevPageBtn').disabled = currentPage === 1;
+            document.getElementById('nextPageBtn').disabled = currentPage >= totalPages;
+        }
+
+        function changePageSize() {
+            pageSize = parseInt(document.getElementById('pageSizeSelect').value, 10);
+            currentPage = 1;
+            renderTable();
+        }
+
+        function prevPage() {
+            if (currentPage > 1) {
+                currentPage--;
+                renderTable();
+            }
+        }
+
+        function nextPage() {
+            const totalPages = Math.ceil(filteredData.length / pageSize);
+            if (currentPage < totalPages) {
+                currentPage++;
+                renderTable();
+            }
+        }
+
+        // Sort table logic preserving numeric integer integrity
+        let sortAsc = true;
+        let lastSortCol = '';
+        function sortTable(colName) {
+            if (lastSortCol === colName) {
+                sortAsc = !sortAsc;
+            } else {
+                sortAsc = true;
+                lastSortCol = colName;
+            }
+
+            filteredData.sort((a, b) => {
+                let valA = a[colName] || '';
+                let valB = b[colName] || '';
+
+                const numA = Number(String(valA).replace(/[\$,RM\s]/gi, '').replace(/,/g, ''));
+                const numB = Number(String(valB).replace(/[\$,RM\s]/gi, '').replace(/,/g, ''));
+
+                if (!isNaN(numA) && !isNaN(numB)) {
+                    return sortAsc ? numA - numB : numB - numA;
+                }
+
+                return sortAsc ? String(valA).localeCompare(String(valB)) : String(valB).localeCompare(String(valA));
+            });
+
+            renderTable();
+        }
+
+        // 1. Export as PDF
+        function exportToPDF() {
+            const element = document.getElementById('dashboardReportContent');
+            const opt = {
+                margin:       [0.3, 0.3, 0.3, 0.3],
+                filename:     `Laporan_Dashboard_Cream_Gold_${new Date().toISOString().slice(0,10)}.pdf`,
+                image:        { type: 'jpeg', quality: 0.98 },
+                html2canvas:  { scale: 2, useCORS: true },
+                jsPDF:        { unit: 'in', format: 'a4', orientation: 'landscape' }
+            };
+
+            showStatus('Menjana PDF... Sila tunggu sebentar.', 'info');
+            
+            // Temporary trigger window print or html2pdf
+            if (window.html2pdf) {
+                html2pdf().set(opt).from(element).save().then(() => {
+                    showStatus('PDF Berjaya dimuat turun!', 'success');
+                }).catch(() => {
+                    window.print();
+                });
+            } else {
+                window.print();
+            }
+        }
+
+        // 2. Export as Microsoft Word Document (.doc)
+        function exportToWord() {
+            showStatus('Menjana Dokumen Word...', 'info');
+
+            let headerHTML = `
+                <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+                <head>
+                    <meta charset='utf-8'>
+                    <title>Laporan Dashboard</title>
+                    <style>
+                        body { font-family: 'Arial', sans-serif; background-color: #FAF7F0; color: #2A2621; }
+                        h1 { color: #B8860B; text-align: center; border-bottom: 2px solid #D4AF37; padding-bottom: 10px; }
+                        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                        th { background-color: #1A1815; color: #D4AF37; border: 1px solid #D4AF37; padding: 8px; text-align: left; }
+                        td { border: 1px solid #E3D3A3; padding: 8px; background-color: #FFFFFF; }
+                        .kpi-box { background: #F4EFE3; border: 1px solid #D4AF37; padding: 15px; margin-bottom: 15px; border-radius: 5px; }
+                    </style>
+                </head>
+                <body>
+                    <h1>LAPORAN DATA DASHBOARD LIVE</h1>
+                    <p style="text-align: center; color: #666;">Tarikh Jana: ${new Date().toLocaleString('ms-MY')}</p>
+                    <div class="kpi-box">
+                        <h3>RINGKASAN METRIK</h3>
+                        <p><strong>Jumlah Rekod Ditapis:</strong> ${filteredData.length}</p>
+                        <p><strong>Jumlah Rekod Keseluruhan:</strong> ${rawData.length}</p>
+                    </div>
+                    <h3>JADUAL REKOD LENGKAP</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                ${columns.map(c => `<th>${escapeHtml(c)}</th>`).join('')}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${filteredData.map(r => `
+                                <tr>
+                                    ${columns.map(c => `<td>${escapeHtml(String(r[c] !== undefined ? r[c] : ''))}</td>`).join('')}
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </body>
+                </html>
+            `;
+
+            const blob = new Blob(['\ufeff', headerHTML], {
+                type: 'application/msword'
+            });
+
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Laporan_Dashboard_${new Date().toISOString().slice(0,10)}.doc`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+
+            showStatus('Dokumen Word berjaya dijana dan dimuat turun!', 'success');
+        }
+
+        // 3. Export filtered CSV
+        function exportCSV() {
+            if (filteredData.length === 0) return;
+            const csv = Papa.unparse(filteredData);
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Data_Filtered_${new Date().toISOString().slice(0,10)}.csv`;
+            a.click();
+        }
+
+        // Helper Utility Functions
+        function escapeHtml(str) {
+            return String(str)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        function showStatus(msg, type) {
+            const banner = document.getElementById('statusBanner');
+            const icon = document.getElementById('statusIcon');
+            const text = document.getElementById('statusText');
+
+            banner.classList.remove('hidden', 'bg-blue-50', 'bg-green-50', 'bg-yellow-50', 'bg-red-50', 'border-blue-300', 'border-green-300', 'border-yellow-300', 'border-red-300');
+            
+            if (type === 'success') {
+                banner.classList.add('bg-green-50', 'border-green-300', 'text-green-800');
+                icon.className = 'fa-solid fa-circle-check text-green-600';
+            } else if (type === 'warning') {
+                banner.classList.add('bg-yellow-50', 'border-yellow-300', 'text-yellow-800');
+                icon.className = 'fa-solid fa-triangle-exclamation text-yellow-600';
+            } else if (type === 'error') {
+                banner.classList.add('bg-red-50', 'border-red-300', 'text-red-800');
+                icon.className = 'fa-solid fa-circle-xmark text-red-600';
+            } else {
+                banner.classList.add('bg-blue-50', 'border-blue-300', 'text-blue-800');
+                icon.className = 'fa-solid fa-circle-info text-blue-600';
+            }
+
+            text.innerText = msg;
+
+            if (type === 'success') {
+                setTimeout(() => {
+                    banner.classList.add('hidden');
+                }, 4000);
+            }
+        }
+    </script>
+</body>
+</html>
